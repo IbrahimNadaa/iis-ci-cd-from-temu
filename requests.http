@@ -1,0 +1,43 @@
+@baseUrl = http://127.0.0.1:5080
+@apiKey = replace-with-the-secret-configured-on-your-server
+
+### OpenAPI document. The browser UI is at {{baseUrl}}/swagger.
+GET {{baseUrl}}/swagger/v1/swagger.json
+
+### 1. Upload a ZIP. Change the local file path below.
+POST {{baseUrl}}/api/uploads
+X-Api-Key: {{apiKey}}
+Content-Type: multipart/form-data; boundary=deploy-boundary
+
+--deploy-boundary
+Content-Disposition: form-data; name="file"; filename="release.zip"
+Content-Type: application/zip
+
+< C:\Builds\release.zip
+--deploy-boundary--
+
+### 2. Deploy. Paste the actual path returned by upload.
+POST {{baseUrl}}/api/deployments
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "zipFilePath": "C:\\IisDeployData\\uploads\\<upload-id>.zip",
+  "webAppPath": "C:\\inetpub\\wwwroot\\MyApp",
+  "applicationPoolName": "MyAppPool"
+}
+
+### 3. List IIS application pools, application paths, and backups.
+GET {{baseUrl}}/api/iis/applications
+X-Api-Key: {{apiKey}}
+
+### 4. Restore. Paste a real backup path from deploy or discovery.
+POST {{baseUrl}}/api/restores
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "backupZipPath": "C:\\IisDeployData\\backups\\<application-key>\\<backup-id>.zip",
+  "webAppPath": "C:\\inetpub\\wwwroot\\MyApp",
+  "applicationPoolName": "MyAppPool"
+}
