@@ -12,6 +12,8 @@ A small ASP.NET Core 10 API for a Windows server with IIS. It has five endpoints
 
 Every API operation requires the `X-Api-Key` header.
 
+All five endpoints are implemented in `Controllers/DeploymentController.cs`. The controller binds incoming requests and returns responses through `DeploymentService`, which handles IIS, files, and backups. `Program.cs` registers and maps controllers and configures API-key middleware and Swagger.
+
 ## Setup
 
 1. Use Windows with IIS installed, including the **Management Scripts and Tools** feature, and the .NET 10 SDK for running from source.
@@ -190,3 +192,4 @@ Source was written and reviewed without building, running the API, changing IIS,
 - [Microsoft.Web.Administration package](https://www.nuget.org/packages/Microsoft.Web.Administration/11.1.0)
 - [Swashbuckle setup and Swagger UI](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/blob/v10.3.0/README.md)
 - [Microsoft: file results in Minimal APIs](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/responses?view=aspnetcore-10.0#file-result-return-values)
+- [Microsoft: controller-based web APIs](https://learn.microsoft.com/en-us/aspnet/core/web-api/?view=aspnetcore-10.0)

@@ -23,7 +23,7 @@ builder.Services.Configure<IISServerOptions>(server => server.MaxRequestBodySize
 builder.Services.Configure<FormOptions>(form => form.MultipartBodyLengthLimit = requestLimit);
 builder.Services.AddSingleton(options);
 builder.Services.AddSingleton<DeploymentService>();
-builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddControllers();
 builder.Services.AddSwaggerGen(swagger =>
 {
     swagger.SwaggerDoc("v1", new OpenApiInfo
@@ -103,72 +103,6 @@ app.Use(async (context, next) =>
     }
 });
 
-app.MapPost("/api/uploads", async (IFormFile file, DeploymentService service, CancellationToken ct) =>
-    Results.Ok(await service.UploadAsync(file, ct)))
-    .WithName("UploadZip")
-    .WithTags("Uploads")
-    .WithSummary("Upload a build ZIP")
-    .WithDescription("Send a ZIP using the multipart field 'file'. Returns its absolute path on the IIS server.")
-    .Produces<UploadResult>()
-    .ProducesProblem(400)
-    .ProducesProblem(401)
-    .ProducesProblem(413)
-    .ProducesProblem(500)
-    .DisableAntiforgery(); // Header authentication only; this API does not use cookies.
-
-app.MapPost("/api/deployments", async (DeployRequest request, DeploymentService service, CancellationToken ct) =>
-    Results.Ok(await service.DeployAsync(request, ct)))
-    .WithName("DeployApplication")
-    .WithTags("Deployments")
-    .WithSummary("Deploy a build to an IIS application")
-    .WithDescription("Use the path returned by upload. Backs up the current application, overwrites matching files, keeps other files, and restarts the pool.")
-    .Produces<DeploymentResult>()
-    .ProducesProblem(400)
-    .ProducesProblem(401)
-    .ProducesProblem(404)
-    .ProducesProblem(409)
-    .ProducesProblem(413)
-    .ProducesProblem(500);
-
-app.MapGet("/api/iis/applications", (DeploymentService service) => Results.Ok(service.GetApplications()))
-    .WithName("GetIisApplications")
-    .WithTags("IIS")
-    .WithSummary("List IIS pools, applications, and backups")
-    .WithDescription("Returns all IIS application pools with application paths and related backups created by this API, newest first.")
-    .Produces<IReadOnlyList<PoolInfo>>()
-    .ProducesProblem(401)
-    .ProducesProblem(500);
-
-app.MapPost("/api/restores", async (RestoreRequest request, DeploymentService service, CancellationToken ct) =>
-    Results.Ok(await service.RestoreAsync(request, ct)))
-    .WithName("RestoreApplication")
-    .WithTags("Restores")
-    .WithSummary("Restore an IIS application from a backup")
-    .WithDescription("Use a backup path returned by deployment or discovery. Backs up the current application, replaces its contents with the selected snapshot, and restarts the pool. Files absent from the snapshot are removed.")
-    .Produces<DeploymentResult>()
-    .ProducesProblem(400)
-    .ProducesProblem(401)
-    .ProducesProblem(404)
-    .ProducesProblem(409)
-    .ProducesProblem(413)
-    .ProducesProblem(500);
-
-app.MapGet("/api/backups/download", async (string backupZipPath, DeploymentService service,
-    HttpContext context, CancellationToken ct) =>
-{
-    var stream = await service.OpenBackupDownloadAsync(backupZipPath, ct);
-    context.Response.Headers.CacheControl = "no-store";
-    return TypedResults.File(stream, contentType: "application/zip",
-        fileDownloadName: Path.GetFileName(stream.Name));
-})
-    .WithName("DownloadBackup")
-    .WithTags("Backups")
-    .WithSummary("Download a backup ZIP by its full path")
-    .WithDescription("Pass backupZipPath from deployment or IIS discovery as a query parameter. Downloads a backup created by this API after verifying its metadata and SHA-256 hash.")
-    .Produces<Stream>(contentType: "application/zip")
-    .ProducesProblem(400)
-    .ProducesProblem(401)
-    .ProducesProblem(404)
-    .ProducesProblem(500);
+app.MapControllers();
 
 app.Run();
