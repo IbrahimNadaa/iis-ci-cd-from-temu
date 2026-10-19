@@ -191,5 +191,5 @@ Source was written and reviewed without building, running the API, changing IIS,
 - [Microsoft: ASP.NET Core file uploads](https://learn.microsoft.com/en-us/aspnet/core/mvc/models/file-uploads?view=aspnetcore-10.0)
 - [Microsoft.Web.Administration package](https://www.nuget.org/packages/Microsoft.Web.Administration/11.1.0)
 - [Swashbuckle setup and Swagger UI](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/blob/v10.3.0/README.md)
-- [Microsoft: file results in Minimal APIs](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/responses?view=aspnetcore-10.0#file-result-return-values)
+- [Microsoft: controller file responses](https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.mvc.controllerbase.file?view=aspnetcore-10.0)
 - [Microsoft: controller-based web APIs](https://learn.microsoft.com/en-us/aspnet/core/web-api/?view=aspnetcore-10.0)
