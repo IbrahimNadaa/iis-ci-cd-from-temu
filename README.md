@@ -46,6 +46,26 @@ Swagger includes endpoint descriptions, request/response schemas, a file picker 
 
 The OpenAPI JSON document is available at `/swagger/v1/swagger.json`. Swagger UI and its JSON document are available without a key in all environments so that the browser can load the authorization dialog; all API operations still require a valid key. The key is never embedded in the document or page. If hosted under an IIS application path, append `/swagger` to that application's URL.
 
+### Hosting under a directory such as `/cicd`
+
+Configure `cicd` as an **IIS application** with its own application pool. IIS supplies the application's base path automatically. Controller routes remain relative to the application; there is no `/cicd` value to hardcode in the controller or Swagger configuration. See [Microsoft's IIS hosting guidance](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-10.0#sub-applications).
+
+For an application hosted at `https://your-server/cicd`:
+
+| Resource | URL path |
+| --- | --- |
+| Swagger UI | `/cicd/swagger` |
+| OpenAPI document | `/cicd/swagger/v1/swagger.json` |
+| Upload | `/cicd/api/uploads` |
+| Deploy | `/cicd/api/deployments` |
+| Discover applications | `/cicd/api/iis/applications` |
+| Restore | `/cicd/api/restores` |
+| Download a backup | `/cicd/api/backups/download?backupZipPath=...` |
+
+Swagger loads its document using `./v1/swagger.json`, relative to the UI page. The generated document uses `Request.PathBase` as its server URL, so **Try it out** includes `/cicd` for all API calls. Root hosting and nested IIS application paths use the same configuration. Set `@baseUrl` in `requests.http` to `https://your-server/cicd` when calling that deployment directly.
+
+If another reverse proxy sits in front of the app, it must preserve or correctly configure the external application base path in ASP.NET Core. In particular, a proxy that removes `/cicd` must arrange for `Request.PathBase` to be `/cicd`; Swagger cannot recover a prefix that the server never receives. See [Microsoft's proxy and path-base guidance](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0#work-with-path-base-and-proxies-that-change-the-request-path).
+
 ## 1. Upload
 
 Send `multipart/form-data` with one field named `file`:

@@ -52,10 +52,26 @@ var expectedKeyHash = SHA256.HashData(Encoding.UTF8.GetBytes(options.ApiKey));
 
 // Serve documentation before key validation so a browser can load the Authorize dialog.
 // Calls to the API endpoints still pass through key validation below.
-app.UseSwagger();
+app.UseSwagger(swagger =>
+{
+    swagger.PreSerializeFilters.Add((document, request) =>
+    {
+        // IIS sets PathBase for a sub-application such as /cicd.
+        // Keep Try it out on the same origin and inside that application.
+        document.Servers =
+        [
+            new OpenApiServer
+            {
+                Url = request.PathBase.HasValue ? request.PathBase.ToUriComponent() : "/"
+            }
+        ];
+    });
+});
 app.UseSwaggerUI(swagger =>
 {
-    swagger.SwaggerEndpoint("v1/swagger.json", "IIS Deployment API v1");
+    swagger.RoutePrefix = "swagger";
+    // Resolve from /<application>/swagger/index.html, including nested application paths.
+    swagger.SwaggerEndpoint("./v1/swagger.json", "IIS Deployment API v1");
     swagger.DocumentTitle = "IIS Deployment API";
 });
 

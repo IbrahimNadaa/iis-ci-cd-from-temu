@@ -1,3 +1,4 @@
+# For an IIS sub-application, use the full application URL, for example https://your-server/cicd.
 @baseUrl = http://127.0.0.1:5080
 @apiKey = replace-with-the-secret-configured-on-your-server
 @backupZipPath = C%3A%5CIisDeployData%5Cbackups%5C%3Capplication-key%3E%5C%3Cbackup-id%3E.zip
