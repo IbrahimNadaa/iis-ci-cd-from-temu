@@ -1,6 +1,6 @@
 # IIS Deployment API
 
-A small ASP.NET Core 10 API for a Windows server with IIS. It has four endpoints and stores uploads, backup ZIPs, and backup metadata on disk. There is no database.
+A small ASP.NET Core 10 API for a Windows server with IIS. It has five endpoints and stores uploads, backup ZIPs, and backup metadata on disk. There is no database.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
@@ -8,6 +8,7 @@ A small ASP.NET Core 10 API for a Windows server with IIS. It has four endpoints
 | POST | `/api/deployments` | Back up the current application, overwrite files from the uploaded ZIP, then start the pool. Files absent from the ZIP remain. |
 | GET | `/api/iis/applications` | List all IIS pools, their applications and physical paths, and all backups made by this API for each application. |
 | POST | `/api/restores` | Back up the current application, replace its contents with a saved backup, then start the pool. |
+| GET | `/api/backups/download?backupZipPath=...` | Download a saved backup ZIP by its full server path. |
 
 Every API operation requires the `X-Api-Key` header.
 
@@ -37,11 +38,11 @@ The address configured in `appsettings.json` is `http://127.0.0.1:5080`. The com
 
 ## Swagger UI
 
-After starting the API with the command above, open `http://127.0.0.1:5080/swagger`. When using the included Visual Studio launch profile, use `https://localhost:50781/swagger` instead. Click **Authorize**, enter your `Deployment__ApiKey` value, and click **Authorize** again. Swagger sends it in the `X-Api-Key` header for all four operations. Use **Try it out** to choose a ZIP file or enter a JSON request body, then **Execute** to submit it.
+After starting the API with the command above, open `http://127.0.0.1:5080/swagger`. When using the included Visual Studio launch profile, use `https://localhost:50781/swagger` instead. Click **Authorize**, enter your `Deployment__ApiKey` value, and click **Authorize** again. Swagger sends it in the `X-Api-Key` header for all five operations. Use **Try it out** to choose a ZIP file, enter a JSON request body, or provide a backup path for download, then **Execute** to submit it.
 
 Swagger includes endpoint descriptions, request/response schemas, a file picker for uploads, and documented error responses. Deployment and restore requests submitted from Swagger perform real changes to IIS and application files.
 
-The OpenAPI JSON document is available at `/swagger/v1/swagger.json`. Swagger UI and its JSON document are available without a key in all environments so that the browser can load the authorization dialog; the four API operations still require a valid key. The key is never embedded in the document or page. If hosted under an IIS application path, append `/swagger` to that application's URL.
+The OpenAPI JSON document is available at `/swagger/v1/swagger.json`. Swagger UI and its JSON document are available without a key in all environments so that the browser can load the authorization dialog; all API operations still require a valid key. The key is never embedded in the document or page. If hosted under an IIS application path, append `/swagger` to that application's URL.
 
 ## 1. Upload
 
@@ -149,6 +150,22 @@ Each `backups` item has the same shape as `previousBuildBackup` above. Backups a
 
 Use a backup path returned by endpoint 2 or 3. Restore verifies that the ZIP belongs to that application and pool and matches its saved SHA-256 hash. It backs up the current app with reason `before-restore`, then replaces the app's files and directories with the selected snapshot. **Files added after that snapshot are removed.** The current version's backup is returned as `previousBuildBackup`; `operation` is `restore`.
 
+## 5. Download a backup
+
+`GET /api/backups/download` takes a required query parameter named `backupZipPath`. Use a backup's `zipFilePath` returned by deployment, restore, or IIS discovery. In Swagger, choose **DownloadBackup**, click **Try it out**, paste the full path, and execute. Use the **Download file** link in the response to save the ZIP.
+
+PowerShell example (replace the placeholder with an actual backup path):
+
+```powershell
+$backupPath = 'C:\IisDeployData\backups\<application-key>\<backup-id>.zip'
+curl.exe --fail-with-body --get http://127.0.0.1:5080/api/backups/download `
+  -H "X-Api-Key: $env:Deployment__ApiKey" `
+  --data-urlencode "backupZipPath=$backupPath" `
+  --output .\backup.zip
+```
+
+The parameter is a server path; `--data-urlencode` handles spaces and backslashes. The response streams `application/zip` with `Content-Disposition: attachment` and the original backup filename. It is marked `Cache-Control: no-store`. Only registered backup ZIPs under this API's backups directory are accepted, and the saved metadata, file size, and SHA-256 hash must match. No application path or pool name is needed, and downloading does not modify IIS. Missing backup files or metadata return `404`; invalid paths, metadata, or integrity checks return `400`.
+
 ## Recovery and operating limits
 
 - Deployment and restore are synchronous and allow one operation at a time. A concurrent mutation gets `409`. A file lock prevents multiple API instances from sharing the same `DataRoot`; run one instance per IIS server.
@@ -172,3 +189,4 @@ Source was written and reviewed without building, running the API, changing IIS,
 - [Microsoft: ASP.NET Core file uploads](https://learn.microsoft.com/en-us/aspnet/core/mvc/models/file-uploads?view=aspnetcore-10.0)
 - [Microsoft.Web.Administration package](https://www.nuget.org/packages/Microsoft.Web.Administration/11.1.0)
 - [Swashbuckle setup and Swagger UI](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/blob/v10.3.0/README.md)
+- [Microsoft: file results in Minimal APIs](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/responses?view=aspnetcore-10.0#file-result-return-values)

@@ -1,5 +1,6 @@
 @baseUrl = http://127.0.0.1:5080
 @apiKey = replace-with-the-secret-configured-on-your-server
+@backupZipPath = C%3A%5CIisDeployData%5Cbackups%5C%3Capplication-key%3E%5C%3Cbackup-id%3E.zip
 
 ### OpenAPI document. The browser UI is at {{baseUrl}}/swagger.
 GET {{baseUrl}}/swagger/v1/swagger.json
@@ -41,3 +42,7 @@ Content-Type: application/json
   "webAppPath": "C:\\inetpub\\wwwroot\\MyApp",
   "applicationPoolName": "MyAppPool"
 }
+
+### 5. Download a backup. Replace backupZipPath above with a URL-encoded real backup path.
+GET {{baseUrl}}/api/backups/download?backupZipPath={{backupZipPath}}
+X-Api-Key: {{apiKey}}

@@ -87,6 +87,60 @@ public sealed class DeploymentService : IDisposable
 
     public IReadOnlyList<PoolInfo> GetApplications() => _iis.GetApplications(ReadBackups);
 
+    public async Task<FileStream> OpenBackupDownloadAsync(string backupZipPath, CancellationToken ct)
+    {
+        var source = SafeFiles.LocalPath(backupZipPath);
+        var directory = Path.GetDirectoryName(source);
+        if (!string.Equals(Path.GetExtension(source), ".zip", StringComparison.OrdinalIgnoreCase) ||
+            directory is null ||
+            !string.Equals(Path.GetDirectoryName(directory), _backups, StringComparison.OrdinalIgnoreCase))
+            throw new ApiException(400, "BackupZipPath must identify a saved ZIP inside the API's backups directory.");
+
+        var metadataPath = Path.ChangeExtension(source, ".json");
+        SafeFiles.RejectReparseAncestors(source);
+        SafeFiles.RejectReparseAncestors(metadataPath);
+        try
+        {
+            var backup = JsonSerializer.Deserialize<BackupInfo>(
+                await File.ReadAllTextAsync(metadataPath, ct), JsonOptions);
+            if (backup is null || string.IsNullOrWhiteSpace(backup.WebAppPath) ||
+                string.IsNullOrWhiteSpace(backup.ApplicationPoolName) ||
+                !string.Equals(backup.Id, Path.GetFileNameWithoutExtension(source), StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(backup.ZipFilePath, source, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(BackupDirectory(SafeFiles.LocalPath(backup.WebAppPath), backup.ApplicationPoolName),
+                    directory, StringComparison.OrdinalIgnoreCase))
+                throw new ApiException(400, "The backup metadata does not match this ZIP.");
+
+            // Keep the validated file open so it cannot be replaced during the download.
+            var stream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read,
+                81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            try
+            {
+                var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, ct));
+                if (stream.Length != backup.SizeBytes || !string.Equals(hash, backup.Sha256, StringComparison.OrdinalIgnoreCase))
+                    throw new ApiException(400, "The backup ZIP failed its integrity check.");
+                stream.Position = 0;
+                ct.ThrowIfCancellationRequested();
+                _logger.LogInformation("Downloading backup ZIP {ZipFilePath}", source);
+                // The endpoint's file result owns and disposes the stream after sending it.
+                return stream;
+            }
+            catch
+            {
+                await stream.DisposeAsync();
+                throw;
+            }
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new ApiException(404, "The backup ZIP or its metadata was not found.");
+        }
+        catch (JsonException)
+        {
+            throw new ApiException(400, "The backup metadata is not valid JSON.");
+        }
+    }
+
     public Task<DeploymentResult> DeployAsync(DeployRequest request, CancellationToken ct) =>
         ExecuteAsync(request.ZipFilePath, request.WebAppPath, request.ApplicationPoolName, restore: false, ct);
 

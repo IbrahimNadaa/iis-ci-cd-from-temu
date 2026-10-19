@@ -30,7 +30,7 @@ builder.Services.AddSwaggerGen(swagger =>
     {
         Title = "IIS Deployment API",
         Version = "v1",
-        Description = "Upload builds, deploy IIS applications, list backups, and restore previous builds."
+        Description = "Upload builds, deploy IIS applications, list and download backups, and restore previous builds."
     });
     swagger.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
     {
@@ -51,7 +51,7 @@ _ = app.Services.GetRequiredService<DeploymentService>();
 var expectedKeyHash = SHA256.HashData(Encoding.UTF8.GetBytes(options.ApiKey));
 
 // Serve documentation before key validation so a browser can load the Authorize dialog.
-// Calls to the four API endpoints still pass through key validation below.
+// Calls to the API endpoints still pass through key validation below.
 app.UseSwagger();
 app.UseSwaggerUI(swagger =>
 {
@@ -92,6 +92,12 @@ app.Use(async (context, next) =>
     {
         app.Logger.LogError(exception, "Request failed: {Method} {Path}",
             context.Request.Method, context.Request.Path);
+        if (context.Response.HasStarted)
+        {
+            // A failed file transfer cannot be replaced with a JSON error mid-response.
+            context.Abort();
+            return;
+        }
         await Results.Problem(statusCode: 500,
             title: "The operation failed. Check the server log for details.").ExecuteAsync(context);
     }
@@ -145,6 +151,24 @@ app.MapPost("/api/restores", async (RestoreRequest request, DeploymentService se
     .ProducesProblem(404)
     .ProducesProblem(409)
     .ProducesProblem(413)
+    .ProducesProblem(500);
+
+app.MapGet("/api/backups/download", async (string backupZipPath, DeploymentService service,
+    HttpContext context, CancellationToken ct) =>
+{
+    var stream = await service.OpenBackupDownloadAsync(backupZipPath, ct);
+    context.Response.Headers.CacheControl = "no-store";
+    return TypedResults.File(stream, contentType: "application/zip",
+        fileDownloadName: Path.GetFileName(stream.Name));
+})
+    .WithName("DownloadBackup")
+    .WithTags("Backups")
+    .WithSummary("Download a backup ZIP by its full path")
+    .WithDescription("Pass backupZipPath from deployment or IIS discovery as a query parameter. Downloads a backup created by this API after verifying its metadata and SHA-256 hash.")
+    .Produces<Stream>(contentType: "application/zip")
+    .ProducesProblem(400)
+    .ProducesProblem(401)
+    .ProducesProblem(404)
     .ProducesProblem(500);
 
 app.Run();
