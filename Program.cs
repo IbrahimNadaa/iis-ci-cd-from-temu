@@ -8,6 +8,14 @@ if (!OperatingSystem.IsWindows())
     throw new PlatformNotSupportedException("This API requires Windows with IIS installed.");
 
 var builder = WebApplication.CreateBuilder(args);
+var configuredBasePath = (builder.Configuration["Hosting:PathBase"] ?? "").Trim().TrimEnd('/');
+if (configuredBasePath.Length > 0 &&
+    (!configuredBasePath.StartsWith('/') || configuredBasePath.Contains("//", StringComparison.Ordinal) ||
+     configuredBasePath.IndexOfAny(['\\', '?', '#']) >= 0 || configuredBasePath.Any(char.IsControl) ||
+     configuredBasePath.Split('/').Any(segment => segment is "." or "..")))
+    throw new InvalidOperationException("Hosting:PathBase must be a path such as /cicd, or empty for automatic detection.");
+var configuredPathBase = new PathString(configuredBasePath);
+
 var options = builder.Configuration.GetSection("Deployment").Get<DeploymentOptions>()
     ?? throw new InvalidOperationException("Missing Deployment configuration.");
 
@@ -46,6 +54,22 @@ builder.Services.AddSwaggerGen(swagger =>
 });
 
 var app = builder.Build();
+
+if (configuredPathBase.HasValue)
+{
+    // Extract a prefix still present in the forwarded path before matching controller routes.
+    app.UsePathBase(configuredPathBase);
+    app.Use((context, next) =>
+    {
+        // Some proxies strip the prefix without setting PathBase. IIS may already set it.
+        if (!context.Request.PathBase.HasValue)
+            context.Request.PathBase = configuredPathBase;
+        return next(context);
+    });
+}
+// Keep routing after path normalization; implicit routing would run too early.
+app.UseRouting();
+
 // Resolve now so invalid filesystem configuration fails before accepting requests.
 _ = app.Services.GetRequiredService<DeploymentService>();
 var expectedKeyHash = SHA256.HashData(Encoding.UTF8.GetBytes(options.ApiKey));
@@ -56,15 +80,16 @@ app.UseSwagger(swagger =>
 {
     swagger.PreSerializeFilters.Add((document, request) =>
     {
-        // IIS sets PathBase for a sub-application such as /cicd.
-        // Keep Try it out on the same origin and inside that application.
+        // Prefer the normalized base path. If the host supplies none, resolve against the
+        // public /<application>/swagger/v1/swagger.json URL instead of dropping to '/'.
         document.Servers =
         [
             new OpenApiServer
             {
-                Url = request.PathBase.HasValue ? request.PathBase.ToUriComponent() : "/"
+                Url = request.PathBase.HasValue ? request.PathBase.ToUriComponent() : "../../"
             }
         ];
+        request.HttpContext.Response.Headers.CacheControl = "no-store";
     });
 });
 app.UseSwaggerUI(swagger =>
@@ -72,7 +97,7 @@ app.UseSwaggerUI(swagger =>
     swagger.RoutePrefix = "swagger";
     // Resolve from /<application>/swagger/index.html, including nested application paths.
     swagger.SwaggerEndpoint("./v1/swagger.json", "IIS Deployment API v1");
-    swagger.DocumentTitle = "IIS Deployment API";
+    SwaggerUiTheme.Apply(swagger, builder.Configuration, builder.Environment.EnvironmentName);
 });
 
 app.Use(async (context, next) =>

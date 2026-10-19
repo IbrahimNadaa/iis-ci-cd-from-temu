@@ -46,9 +46,41 @@ Swagger includes endpoint descriptions, request/response schemas, a file picker 
 
 The OpenAPI JSON document is available at `/swagger/v1/swagger.json`. Swagger UI and its JSON document are available without a key in all environments so that the browser can load the authorization dialog; all API operations still require a valid key. The key is never embedded in the document or page. If hosted under an IIS application path, append `/swagger` to that application's URL.
 
+### Environment label and color
+
+Swagger shows a sticky environment banner, colors its header and accents, and includes the environment name in the browser tab. Configure these values in `appsettings.json`, an environment-specific settings file, or environment variables:
+
+```json
+"SwaggerUi": {
+  "EnvironmentName": "PRODUCTION",
+  "AccentColor": "#B91C1C"
+}
+```
+
+`EnvironmentName` controls the visible label. If empty, it uses the running ASP.NET Core environment name. `AccentColor` accepts a six-digit hex color (`#RRGGBB`). If empty, the color follows the running environment:
+
+| ASP.NET Core environment | Automatic color |
+| --- | --- |
+| Development | Blue (`#2563EB`) |
+| Staging | Amber (`#B45309`) |
+| Production | Red (`#B91C1C`) |
+| Any custom environment | Slate (`#475569`) |
+
+The banner automatically uses black or white text for contrast. Only the display label and appearance change; setting `SwaggerUi:EnvironmentName` does not change the app's actual ASP.NET Core environment or behavior. For per-server overrides, set `SwaggerUi__EnvironmentName` and `SwaggerUi__AccentColor`. Restart the API and refresh Swagger after changing configuration. Styling is embedded in the Swagger page, so it works under `/cicd` without additional CSS or script routes.
+
 ### Hosting under a directory such as `/cicd`
 
-Configure `cicd` as an **IIS application** with its own application pool. IIS supplies the application's base path automatically. Controller routes remain relative to the application; there is no `/cicd` value to hardcode in the controller or Swagger configuration. See [Microsoft's IIS hosting guidance](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-10.0#sub-applications).
+Configure `cicd` as an **IIS application** with its own application pool. Controller routes remain relative to the application. IIS normally supplies its base path; other hosting or proxy configurations may need an explicit setting. See [Microsoft's IIS hosting guidance](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-10.0#sub-applications).
+
+If the host does not supply the base path, set this in `appsettings.json` (or set environment variable `Hosting__PathBase` to `/cicd`):
+
+```json
+"Hosting": {
+  "PathBase": "/cicd"
+}
+```
+
+Use your actual application path. The default empty value enables automatic detection. With an explicit value, middleware handles both `/cicd/api/...` arriving intact and `/api/...` arriving after a proxy strips the prefix. Path normalization runs before routing; an existing IIS base path is retained rather than added again. Restart the API after changing this setting.
 
 For an application hosted at `https://your-server/cicd`:
 
@@ -62,9 +94,9 @@ For an application hosted at `https://your-server/cicd`:
 | Restore | `/cicd/api/restores` |
 | Download a backup | `/cicd/api/backups/download?backupZipPath=...` |
 
-Swagger loads its document using `./v1/swagger.json`, relative to the UI page. The generated document uses `Request.PathBase` as its server URL, so **Try it out** includes `/cicd` for all API calls. Root hosting and nested IIS application paths use the same configuration. Set `@baseUrl` in `requests.http` to `https://your-server/cicd` when calling that deployment directly.
+Swagger loads its document using `./v1/swagger.json`, relative to the UI page. The generated document uses the normalized `Request.PathBase` as its server URL. When the host supplies no base path, it uses `../../` relative to the public OpenAPI document URL, keeping the directory visible to the browser. For `/cicd/swagger/v1/swagger.json`, that resolves to `/cicd/`, so **Try it out** calls `/cicd/api/...`. Root hosting and nested application paths also work. Set `@baseUrl` in `requests.http` to `https://your-server/cicd` when calling that deployment directly.
 
-If another reverse proxy sits in front of the app, it must preserve or correctly configure the external application base path in ASP.NET Core. In particular, a proxy that removes `/cicd` must arrange for `Request.PathBase` to be `/cicd`; Swagger cannot recover a prefix that the server never receives. See [Microsoft's proxy and path-base guidance](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0#work-with-path-base-and-proxies-that-change-the-request-path).
+After deploying this change, hard-refresh Swagger at `/cicd/swagger`. The OpenAPI response is marked `Cache-Control: no-store` so future loads do not keep an outdated server URL. The operation list may still display `/api/...`; its **Request URL** must include `/cicd/api/...`. See [Microsoft's proxy and path-base guidance](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0#work-with-path-base-and-proxies-that-change-the-request-path) and [Swagger's relative server URL guidance](https://swagger.io/docs/specification/v3_0/api-host-and-base-path/).
 
 ## 1. Upload
 
